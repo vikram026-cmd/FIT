@@ -1,0 +1,131 @@
+#include <DHT.h>
+
+HardwareSerial PiSerial(2);
+
+#define DHTPIN 4
+#define DHTTYPE DHT11
+
+#define PULSE_PIN 34
+#define NTC_PIN 18
+
+#define THRESHOLD 2000
+
+DHT dht(DHTPIN, DHTTYPE);
+
+unsigned long lastBeatTime = 0;
+unsigned long lastSampleTime = 0;
+unsigned long windowStart = 0;
+
+int bpm = 0;
+int totalBPM = 0;
+int beatCount = 0;
+int averageBPM = 0;
+
+bool beatDetected = false;
+
+void setup()
+{
+  Serial.begin(115200);
+
+  PiSerial.begin(115200, SERIAL_8N1, 16, 17);
+
+  pinMode(NTC_PIN, INPUT);
+
+  analogReadResolution(12);
+  analogSetPinAttenuation(PULSE_PIN, ADC_11db);
+
+  dht.begin();
+
+  windowStart = millis();
+
+  Serial.println("Patient Monitoring Started");
+}
+
+void loop()
+{
+  unsigned long now = millis();
+
+  // Heart Rate Detection
+  if (now - lastSampleTime >= 5)
+  {
+    lastSampleTime = now;
+
+    int signal = analogRead(PULSE_PIN);
+
+    if (signal > THRESHOLD && !beatDetected)
+    {
+      unsigned long interval = now - lastBeatTime;
+
+      // Accept only realistic intervals
+      if (interval >= 500 && interval <= 1200)
+      {
+        bpm = 60000 / interval;
+
+        // Accept only realistic BPM
+        if (bpm >= 50 && bpm <= 180)
+        {
+          totalBPM += bpm;
+          beatCount++;
+        }
+      }
+
+      lastBeatTime = now;
+      beatDetected = true;
+    }
+
+    if (signal < (THRESHOLD - 100))
+    {
+      beatDetected = false;
+    }
+  }
+
+  // Every 5 seconds calculate average BPM and send data
+  if (now - windowStart >= 5000)
+  {
+    float temperature = dht.readTemperature();
+    float humidity = dht.readHumidity();
+
+    int ntcState = digitalRead(NTC_PIN);
+
+    // Need at least 2 valid beats
+    if (beatCount >= 2)
+    {
+      averageBPM = totalBPM / beatCount;
+    }
+    else
+    {
+      averageBPM = 0;
+    }
+    delay(200);
+    // NTC mapping: transmitted NTC=0 means alert; NTC=1 means normal.\n    // HR is average heart rate in BPM (not systolic blood pressure).\n\n    // Send to Pi
+    PiSerial.print("HR=");
+    PiSerial.print(averageBPM);
+
+    PiSerial.print(",TEMP=");
+    PiSerial.print(temperature);
+
+    PiSerial.print(",HUM=");
+    PiSerial.print(humidity);
+
+    PiSerial.print(",NTC=");
+    PiSerial.println(!ntcState);
+
+    // Debug Monitor
+    Serial.print("HR=");
+    Serial.print(averageBPM);
+
+    Serial.print(",TEMP=");
+    Serial.print(temperature);
+
+    Serial.print(",HUM=");
+    Serial.print(humidity);
+
+    Serial.print(",NTC=");
+    Serial.println(!ntcState);
+
+    totalBPM = 0;
+    beatCount = 0;
+
+    windowStart = now;
+  }
+}

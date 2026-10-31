@@ -1,0 +1,15 @@
+#ifndef PM_CONFIG_H
+#define PM_CONFIG_H
+
+#define PM_UART_DEVICE "/dev/ser1"
+#define PM_UART_BAUD 115200
+#define PM_RELAY_GPIO 17
+#define PM_HEART_RATE_RELAY_THRESHOLD 130
+
+#define PM_PRIORITY_RELAY 65
+#define PM_PRIORITY_UART 60
+#define PM_PRIORITY_PROCESS 55
+#define PM_PRIORITY_CSV 30
+#define PM_PRIORITY_UPLOAD 20
+
+#endif
